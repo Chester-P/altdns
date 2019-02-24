@@ -6,6 +6,7 @@ import argparse
 import threading
 import time
 import datetime
+from itertools import permutations
 from threading import Lock
 from Queue import Queue as Queue
 
@@ -21,7 +22,7 @@ logging.basicConfig(level=logging.CRITICAL)
 
 def get_alteration_words(wordlist_fname):
     with open(wordlist_fname, "r") as f:
-        return f.readlines()
+        return [line.strip() for line in f.readlines()]
 
 # will write to the file if the check returns true
 def write_domain(args, wp, full_url):
@@ -150,7 +151,7 @@ def get_cname(q, target, resolved_out):
     lock.acquire()
     progress += 1
     lock.release()
-    if progress % 500 == 0:
+    if progress % 100 == 0:
         lock.acquire()
         left = linecount-progress
         secondspassed = (int(time.time())-starttime)+1
@@ -242,6 +243,8 @@ def get_line_count(filename):
         linecount = sum(1 for _ in lc)
     return linecount
 
+def permute_words(words):
+    return words + map(''.join, permutations(words, 2))
 
 def main():
     q = Queue()
@@ -266,6 +269,13 @@ def main():
                         action="store_true")
     parser.add_argument("-d", "--dnsserver",
                         help="IP address of resolver to use (overrides system default)", required=False)
+    parser.add_argument("-v", "--verbose",
+                        help="Print extra debug info", 
+                        action="store_true")
+    parser.add_argument("-p", "--permutate-all-words",
+                        help="permutate all words in the given wordlist before put them into domains", 
+                        action="store_true")
+
 
     parser.add_argument(
         "-s",
@@ -288,6 +298,10 @@ def main():
             raise SystemExit
 
     alteration_words = get_alteration_words(args.wordlist)
+    
+    if args.permutate_all_words is True:
+        alteration_words = permute_words(alteration_words)
+        print('\n'.join(alteration_words))
 
     # if we should remove existing, save the output to a temporary file
     if args.ignore_existing is True:
@@ -318,7 +332,7 @@ def main():
         global lock
         global starttime
         global found
-        global resolverName       
+        global resolverName
         lock = Lock()
         found = {}
         progress = 0
